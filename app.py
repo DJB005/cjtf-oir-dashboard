@@ -89,64 +89,76 @@ if geo_df is not None:
     required = {"country", "location", "date"}
     if not required.issubset(geo_df.columns):
         st.warning(
-            "Geocoded dataset is missing required columns. Expected columns like: `country`, `location`, `date`, `lat`, `lon`."
+            "Geocoded dataset is missing required columns. Expected columns like: "
+            "`country`, `location`, `date`, `lat`, `lon`."
         )
     else:
         geo = geo_df.copy()
+
         if "strike_count" not in geo.columns:
             geo["strike_count"] = 1
+
         geo["date"] = pd.to_datetime(geo["date"], errors="coerce")
         geo = geo.dropna(subset=["date"])
 
-        geo["location_key"] = (
-            geo["country"].fillna("Unknown") + " | " + geo["location"].fillna("Unknown")
-        )
-        geo = geo.sort_values("date")
-        geo["cum_strikes"] = geo.groupby("location_key")["strike_count"].cumsum()
-
-        min_date = geo["date"].min()
-        max_date = geo["date"].max()
-
-        selected_date = st.slider(
-            "Cumulative through",
-            min_value=min_date,
-            max_value=max_date,
-            value=max_date,
-            format="YYYY-MM-DD",
-        )
-
-        filtered = geo[geo["date"] <= selected_date].copy()
-        latest = filtered.sort_values("date").groupby(
-            "location_key", as_index=False
-        ).tail(1)
-
-        st.write(f"{len(latest)} locations shown through {selected_date.date()}.")
-        st.dataframe(
-            latest[["country", "location", "cum_strikes"]]
-            .sort_values("cum_strikes", ascending=False),
-            use_container_width=True,
-        )
-
-        if {"lat", "lon"}.issubset(latest.columns):
-            map_fig = px.scatter_geo(
-                latest,
-                lat="lat",
-                lon="lon",
-                size="cum_strikes",
-                color="country",
-                hover_name="location",
-                hover_data={
-                    "cum_strikes": True,
-                    "country": True,
-                    "lat": False,
-                    "lon": False,
-                },
-                title="Cumulative strikes by location (bubble size)",
+        if geo.empty:
+            st.warning(
+                "Geocoded dataset has no valid dates after parsing. Check the `date` column format."
             )
-            map_fig.update_layout(margin=dict(l=10, r=10, t=30, b=10))
-            st.plotly_chart(map_fig, width="stretch")
         else:
-            st.warning("No `lat`/`lon` columns detected. Add geocoded coordinates to show the map.")
+            geo["location_key"] = (
+                geo["country"].fillna("Unknown")
+                + " | "
+                + geo["location"].fillna("Unknown")
+            )
+            geo = geo.sort_values("date")
+            geo["cum_strikes"] = geo.groupby("location_key")["strike_count"].cumsum()
+
+            min_date = geo["date"].min().date()
+            max_date = geo["date"].max().date()
+
+            selected_date = st.slider(
+                "Cumulative through",
+                min_value=min_date,
+                max_value=max_date,
+                value=max_value,
+                format="YYYY-MM-DD",
+            )
+
+            filtered = geo[geo["date"].dt.date <= selected_date].copy()
+            latest = filtered.sort_values("date").groupby(
+                "location_key", as_index=False
+            ).tail(1)
+
+            st.write(f"{len(latest)} locations shown through {selected_date}.")
+            st.dataframe(
+                latest[["country", "location", "cum_strikes"]]
+                .sort_values("cum_strikes", ascending=False),
+                use_container_width=True,
+            )
+
+            if {"lat", "lon"}.issubset(latest.columns):
+                map_fig = px.scatter_geo(
+                    latest,
+                    lat="lat",
+                    lon="lon",
+                    size="cum_strikes",
+                    color="country",
+                    hover_name="location",
+                    hover_data={
+                        "cum_strikes": True,
+                        "country": True,
+                        "lat": False,
+                        "lon": False,
+                    },
+                    title="Cumulative strikes by location (bubble size)",
+                )
+                map_fig.update_layout(margin=dict(l=10, r=10, t=30, b=10))
+                st.plotly_chart(map_fig, width="stretch")
+            else:
+                st.warning(
+                    "No `lat`/`lon` columns detected. Add geocoded coordinates to show the map."
+                )
 else:
     st.info(
         "Add `data/cjtf_oir_strikes_geocoded.csv` (or upload it) to enable the cumulative map."
