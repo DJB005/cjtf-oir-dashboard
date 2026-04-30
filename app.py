@@ -121,7 +121,7 @@ if geo_df is not None:
                 "Cumulative through",
                 min_value=min_date,
                 max_value=max_date,
-                value=max_value,
+                value=max_date,
                 format="YYYY-MM-DD",
             )
 
